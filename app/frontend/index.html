@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard Kesehatan Tanaman</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="dashboard">
+
+  <header class="topbar">
+    <div class="topbar-left">CANOPY ANALYSIS</div>
+    <div class="topbar-right">
+      <button id="btnSettings" class="icon-btn">&#9881; Panel Settings</button>
+      <div class="settings-panel" id="settingsPanel">
+        <div class="settings-panel-title">Panel Settings</div>
+        <div class="settings-field-row">
+          <label for="panelCountSelect">Jumlah Peta Dibandingkan</label>
+          <select id="panelCountSelect">
+            <option value="1">1 (satu peta utama)</option>
+            <option value="2">2 peta</option>
+            <option value="3">3 peta</option>
+            <option value="4">4 peta</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <section class="maps-grid" id="mapsGrid"></section>
+
+    <aside class="analytics-panel" id="analytics-sidebar">
+      <h2 class="panel-title">Analytics Panel</h2>
+
+      <div class="card">
+        <h3>Average Canopy Diameter (m)</h3>
+        <div class="chart-wrap"><canvas id="growthChart"></canvas></div>
+      </div>
+
+      <div class="card">
+        <h3 id="pieTitle">Homogenitas Kanopi</h3>
+        <div class="chart-wrap chart-wrap-pie"><canvas id="pieChart"></canvas></div>
+      </div>
+
+      <div class="card insights-card">
+        <h3>Keterangan</h3>
+        <ul class="insights-list" id="insightsList"></ul>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
