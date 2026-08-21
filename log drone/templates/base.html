@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Report Log Drone{% endblock %}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #1a1d23; color: #e0e0e0; }
+
+        /* Sidebar */
+        .sidebar {
+            position: fixed; top: 0; left: 0; width: 240px; height: 100vh;
+            background: #2c3e50; padding: 0; display: flex; flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 24px 20px; background: #1a252f; text-align: center;
+            border-bottom: 1px solid #34495e;
+        }
+        .sidebar-header h2 { color: #e67e22; font-size: 16px; letter-spacing: 1px; }
+        .sidebar-header small { color: #7f8c8d; font-size: 11px; }
+
+        .sidebar-welcome {
+            padding: 16px 20px; border-bottom: 1px solid #34495e;
+            display: flex; align-items: center; gap: 12px;
+            background: rgba(255, 255, 255, 0.02); flex-shrink: 0;
+        }
+        .sidebar-welcome .avatar {
+            position: relative; width: 44px; height: 44px; border-radius: 50%;
+            background: linear-gradient(135deg, #e67e22, #f39c12);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: 18px; flex-shrink: 0;
+            border: 2px solid #34495e;
+        }
+        .sidebar-welcome .avatar .dot {
+            position: absolute; bottom: 0; right: 0; width: 10px; height: 10px;
+            background: #27ae60; border: 2px solid #2c3e50; border-radius: 50%;
+        }
+        .sidebar-welcome .info { min-width: 0; }
+        .sidebar-welcome .label {
+            font-size: 10px; color: #7f8c8d; text-transform: uppercase;
+            letter-spacing: 0.5px; display: block;
+        }
+        .sidebar-welcome .name {
+            font-size: 13px; color: #fff; font-weight: 700;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;
+        }
+        .sidebar-welcome .role {
+            font-size: 10px; color: #27ae60; display: flex; align-items: center; gap: 4px; margin-top: 2px;
+        }
+
+        .sidebar nav { flex: 1; padding: 12px 0; overflow-y: auto; min-height: 0; }
+        .sidebar nav a {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 24px; color: #bdc3c7; text-decoration: none;
+            font-size: 14px; transition: all 0.2s;
+        }
+        .sidebar nav a:hover { background: #34495e; color: #fff; }
+        .sidebar nav a.active { background: #e67e22; color: #fff; font-weight: 600; }
+        .sidebar nav a .icon { font-size: 18px; width: 24px; text-align: center; }
+
+        .sidebar-footer {
+            padding: 16px 20px; border-top: 1px solid #34495e;
+            font-size: 11px; color: #7f8c8d; text-align: center;
+            flex-shrink: 0;
+        }
+        .sidebar-footer .btn-logout {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            width: 100%; padding: 10px; border-radius: 8px;
+            background: #e74c3c1a; color: #e74c3c; text-decoration: none;
+            font-size: 12px; font-weight: 600; transition: all 0.2s;
+        }
+        .sidebar-footer .btn-logout:hover { background: #e74c3c; color: #fff; }
+
+        /* Main */
+        .main { margin-left: 240px; padding: 32px; min-height: 100vh; }
+        .page-header { margin-bottom: 24px; }
+        .page-header h1 { font-size: 24px; font-weight: 600; color: #fff; }
+        .page-header p { color: #7f8c8d; margin-top: 4px; font-size: 14px; }
+
+        /* Table */
+        .table-container {
+            background: #2c3e50; border-radius: 10px; overflow: hidden;
+        }
+        .table-toolbar {
+            padding: 16px 20px; display: flex; justify-content: space-between;
+            align-items: center; gap: 12px; flex-wrap: wrap;
+            border-bottom: 1px solid #34495e;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            background: #1a252f; color: #7f8c8d; font-size: 11px;
+            text-transform: uppercase; letter-spacing: 1px;
+            padding: 12px 16px; text-align: left; white-space: nowrap;
+        }
+        tbody td {
+            padding: 10px 16px; border-bottom: 1px solid #34495e;
+            font-size: 13px; color: #ddd;
+        }
+        tbody tr:hover { background: #34495e; }
+        tbody tr:last-child td { border-bottom: none; }
+
+        /* Badges */
+        .badge {
+            display: inline-block; padding: 3px 10px; border-radius: 12px;
+            font-size: 11px; font-weight: 600;
+        }
+        .badge-active { background: #27ae6033; color: #27ae60; }
+        .badge-inactive { background: #e74c3c33; color: #e74c3c; }
+        .badge-licensed { background: #3498db33; color: #3498db; }
+        .badge-bound { background: #e67e2233; color: #e67e22; }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 8px 16px; border: none; border-radius: 6px;
+            font-size: 13px; font-weight: 500; cursor: pointer;
+            text-decoration: none; transition: all 0.2s;
+        }
+        .btn-primary { background: #e67e22; color: #fff; }
+        .btn-primary:hover { background: #d35400; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-secondary { background: #34495e; color: #bdc3c7; }
+        .btn-secondary:hover { background: #3d566e; color: #fff; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn-success { background: #27ae60; color: #fff; }
+        .btn-success:hover { background: #219a52; }
+
+        /* Forms */
+        select, input[type="text"], input[type="date"], input[type="password"], input[type="email"] {
+            background: #1a252f; color: #e0e0e0; border: 1px solid #34495e;
+            padding: 8px 12px; border-radius: 6px; font-size: 13px;
+        }
+        select:focus, input:focus { outline: none; border-color: #e67e22; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; color: #7f8c8d; font-size: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 20px; right: 20px; padding: 14px 24px;
+            border-radius: 8px; color: #fff; font-size: 14px; z-index: 2000;
+            display: none; animation: slideIn 0.3s ease;
+        }
+        .toast.success { background: #27ae60; display: block; }
+        .toast.error { background: #e74c3c; display: block; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { width: 60px; } .sidebar-header h2, .sidebar-header small, .sidebar nav a span { display: none; }
+            .sidebar nav a { justify-content: center; padding: 16px; }
+            .main { margin-left: 60px; padding: 16px; }
+            .sidebar-welcome { justify-content: center; padding: 12px; }
+            .sidebar-welcome .info { display: none; }
+            .sidebar-footer .btn-logout { font-size: 14px; padding: 10px 0; }
+            .sidebar-footer .btn-logout .logout-label { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>AGRIPALM VISION</h2>
+            <small>Report Log Drone</small>
+        </div>
+        <div class="sidebar-welcome">
+            <div class="avatar">
+                {{ session.get('admin_user', '')[:1]|upper }}
+                <span class="dot"></span>
+            </div>
+            <div class="info">
+                <span class="label">Selamat datang,</span>
+                <span class="name">{{ session.get('admin_user', '') }}</span>
+            </div>
+        </div>
+        <nav>
+            <a href="{{ url_for('dashboard_drone_report') }}" class="{% if active == 'drone_report' %}active{% endif %}">
+                <span class="icon">&#128257;</span> <span>Report Log Drone</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <a href="{{ url_for('dashboard_logout') }}" class="btn-logout">&#9099; <span class="logout-label">Logout</span></a>
+            <div style="margin-top:10px;">&copy; 2026 PT Bumitama Gunajaya Agro</div>
+        </div>
+    </div>
+
+    <div class="main">
+        {% block content %}{% endblock %}
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        function showToast(msg, type) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast ' + type;
+            setTimeout(() => { t.className = 'toast'; }, 3000);
+        }
+
+        (function() {
+            const params = new URLSearchParams(location.search);
+            const err = params.get('flash_error');
+            const ok = params.get('flash_success');
+            if (err) showToast(err, 'error');
+            if (ok) showToast(ok, 'success');
+            if (err || ok) {
+                params.delete('flash_error');
+                params.delete('flash_success');
+                const qs = params.toString();
+                history.replaceState({}, '', location.pathname + (qs ? '?' + qs : ''));
+            }
+        })();
+
+        async function apiCall(url, method, body) {
+            const resp = await fetch(url, {
+                method: method || 'GET',
+                headers: {'Content-Type': 'application/json'},
+                body: body ? JSON.stringify(body) : undefined,
+            });
+            return resp.json();
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

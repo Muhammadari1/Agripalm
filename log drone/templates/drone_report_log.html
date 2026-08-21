@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}Report Log Drone{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Report Log Drone</h1>
+    <p>Upload flight log DJI (.txt) — satu atau banyak sekaligus. Kalau upload lebih dari 1 file dalam satu batch, semuanya digabung jadi SATU rekap (durasi & jarak ditotal, semua titik tampil di 1 peta). Diproses otomatis lewat app.opendronelog.com.</p>
+</div>
+
+<div class="table-container" style="padding:24px; margin-bottom:24px;">
+    <h3 style="color:#fff; margin-bottom:16px;">Upload File Log</h3>
+
+    <div class="form-group">
+        <label>Nama Batch (opsional)</label>
+        <input type="text" id="formBatchName" placeholder="Contoh: Survei Blok A3 - 30 Jul 2026">
+    </div>
+
+    <div class="form-group">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleInputPanel()">Input</button>
+    </div>
+
+    <div id="inputPanel" style="display:none; border:1px solid #34495e; border-radius:6px; padding:16px; margin-bottom:16px;">
+        <div class="form-group">
+            <label>Nama User</label>
+            <input type="text" id="formNamaUser" placeholder="Nama pilot/operator">
+        </div>
+        <div class="form-group">
+            <label>Kode Drone</label>
+            <input type="text" id="formKodeDrone" placeholder="Contoh: NEO SQA02">
+        </div>
+        <div class="form-group">
+            <label>Lokasi Kerja</label>
+            <input type="text" id="formLokasiKerja" placeholder="Contoh: Region 1 & 2">
+        </div>
+        <div class="form-group">
+            <label>Bulan</label>
+            <select id="formBulan">
+                {% for value, label in bulan_options %}
+                <option value="{{ value }}" {% if value == current_bulan %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>File Flight Log (.txt) — bisa pilih banyak sekaligus, akan digabung jadi 1 rekap</label>
+            <div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('fileUpload').click()">Pilih File...</button>
+            </div>
+            <input type="file" id="fileUpload" accept=".txt" multiple style="display:none;">
+            <div id="selectedFilesDisplay" style="color:#27ae60; font-size:13px; margin-top:8px;"></div>
+        </div>
+    </div>
+
+    <div id="uploadStatus" style="color:#7f8c8d; font-size:12px; margin-bottom:8px;"></div>
+    <button type="button" class="btn btn-primary" id="uploadBtn" onclick="uploadFiles()">Upload &amp; Proses</button>
+</div>
+
+<div class="table-container">
+    <div class="table-toolbar">
+        <strong>Daftar Rekap</strong>
+        <a href="{{ url_for('dashboard_drone_report_rekap') }}" class="btn btn-primary btn-sm">Rekap Pemakaian Drone</a>
+        <a href="{{ url_for('dashboard_drone_report_log') }}" target="_blank" class="btn btn-secondary btn-sm">Lihat Log Worker</a>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th><th>Nama Batch</th><th>Jumlah File</th><th>Status</th><th>Server</th>
+                <th>Drone SN</th><th>Durasi (total)</th><th>Jarak (total)</th><th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody id="filesTableBody">
+        {% for u in uploads %}
+        <tr id="drone-row-{{ u[0] }}">
+            <td>{{ u[0] }}</td>
+            <td>{{ u[1] }}</td>
+            <td>{{ u[9] }}</td>
+            <td class="drone-status">
+                {% if u[2] == 'done' %}<span class="badge badge-active">Done</span>
+                {% elif u[2] == 'failed' %}<span class="badge badge-inactive">Failed</span>
+                {% elif u[2] == 'processing' %}<span class="badge badge-bound">Processing</span>
+                {% else %}<span class="badge badge-licensed">Pending</span>{% endif %}
+            </td>
+            <td class="drone-server" style="font-size:12px; color:#7f8c8d;">{{ u[8] or '-' }}</td>
+            <td class="drone-sn">{{ u[4] or '-' }}</td>
+            <td class="drone-duration">{{ ('%.1f'|format(u[5] / 60)).replace('.', ',') + ' menit' if u[5] is not none else '-' }}</td>
+            <td class="drone-distance">{{ '%.0f m'|format(u[6]) if u[6] is not none else '-' }}</td>
+            <td class="drone-action">
+                {% if u[2] == 'done' %}
+                <a class="btn btn-primary btn-sm" href="{{ url_for('dashboard_drone_report_detail', upload_id=u[0]) }}">&#128506; Lihat</a>
+                {% elif u[2] == 'failed' %}
+                <span class="badge badge-inactive" title="{{ u[3] or '' }}">Gagal</span>
+                {% endif %}
+                {% if u[2] != 'processing' %}
+                <button class="btn btn-danger btn-sm" onclick="deleteFile({{ u[0] }})">Hapus</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        {% if not uploads %}
+        <tr><td colspan="9" style="text-align:center; color:#7f8c8d;">Belum ada file diproses</td></tr>
+        {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedFiles = [];
+
+// Template URL detail batch, dibuat lewat url_for() (server-side) supaya IKUT prefix
+// dashboard yang sebenarnya (/gpn-admin, /agripalm, atau apapun -- prefix disimpan di
+// DB, bisa beda-beda). JANGAN hardcode "/gpn-admin/..." langsung di JS -- ganti
+// "999999" dengan ID batch yang sebenarnya saat dipakai.
+const DRONE_DETAIL_URL_TEMPLATE = "{{ url_for('dashboard_drone_report_detail', upload_id=999999) }}";
+
+document.getElementById('fileUpload').addEventListener('change', (e) => {
+    selectedFiles = Array.from(e.target.files);
+    const display = document.getElementById('selectedFilesDisplay');
+    display.textContent = selectedFiles.length
+        ? selectedFiles.length + ' file dipilih: ' + selectedFiles.map(f => f.name).join(', ')
+        : '';
+});
+
+function toggleInputPanel() {
+    const panel = document.getElementById('inputPanel');
+    panel.style.display = (panel.style.display === 'none') ? 'block' : 'none';
+}
+
+async function uploadFiles() {
+    const namaUser = document.getElementById('formNamaUser').value.trim();
+    if (!namaUser) {
+        showToast('Nama User wajib diisi', 'error');
+        return;
+    }
+    if (!selectedFiles.length) {
+        showToast('Pilih minimal 1 file .txt', 'error');
+        return;
+    }
+    const btn = document.getElementById('uploadBtn');
+    btn.disabled = true;
+    document.getElementById('uploadStatus').textContent = 'Mengupload ' + selectedFiles.length + ' file...';
+
+    const formData = new FormData();
+    formData.append('batch_name', document.getElementById('formBatchName').value);
+    formData.append('nama_user', document.getElementById('formNamaUser').value.trim());
+    formData.append('kode_drone', document.getElementById('formKodeDrone').value.trim());
+    formData.append('lokasi_kerja', document.getElementById('formLokasiKerja').value.trim());
+    formData.append('bulan', document.getElementById('formBulan').value);
+    selectedFiles.forEach(f => formData.append('files', f));
+
+    try {
+        const resp = await fetch('{{ url_for("dashboard_drone_report_upload") }}', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (data.success) {
+            showToast(data.files + ' file ditambahkan ke antrian proses (1 rekap gabungan)', 'success');
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            document.getElementById('uploadStatus').textContent = 'Gagal: ' + data.message;
+            showToast('Gagal: ' + data.message, 'error');
+            btn.disabled = false;
+        }
+    } catch (err) {
+        document.getElementById('uploadStatus').textContent = 'Error: ' + err;
+        btn.disabled = false;
+    }
+}
+
+function deleteFile(id) {
+    if (confirm('Hapus rekap #' + id + '?')) {
+        fetch('{{ url_for("dashboard_drone_report") }}/delete/' + id, { method: 'POST' })
+            .then(() => location.reload());
+    }
+}
+
+function renderActionCell(u) {
+    let html = '';
+    if (u.status === 'done') {
+        html += `<a class="btn btn-primary btn-sm" href="${DRONE_DETAIL_URL_TEMPLATE.replace('999999', u.id)}">&#128506; Lihat</a> `;
+    } else if (u.status === 'failed') {
+        html += `<span class="badge badge-inactive" title="${u.error_message || ''}">Gagal</span> `;
+    }
+    if (u.status !== 'processing') {
+        html += `<button class="btn btn-danger btn-sm" onclick="deleteFile(${u.id})">Hapus</button>`;
+    }
+    return html;
+}
+
+async function refreshFiles() {
+    const data = await apiCall('{{ url_for("dashboard_drone_report_status") }}');
+    (data.uploads || []).forEach(u => {
+        const row = document.getElementById('drone-row-' + u.id);
+        if (!row) return;
+
+        const statusCell = row.querySelector('.drone-status');
+        if (u.status === 'done') statusCell.innerHTML = '<span class="badge badge-active">Done</span>';
+        else if (u.status === 'failed') statusCell.innerHTML = '<span class="badge badge-inactive">Failed</span>';
+        else if (u.status === 'processing') statusCell.innerHTML = '<span class="badge badge-bound">Processing</span>';
+        else statusCell.innerHTML = '<span class="badge badge-licensed">Pending</span>';
+
+        row.querySelector('.drone-server').textContent = u.worker_host || '-';
+        row.querySelector('.drone-sn').textContent = u.drone_sn || '-';
+        row.querySelector('.drone-duration').textContent = (u.duration_s !== null && u.duration_s !== undefined) ? (u.duration_s / 60).toFixed(1).replace('.', ',') + ' menit' : '-';
+        row.querySelector('.drone-distance').textContent = (u.distance_m !== null && u.distance_m !== undefined) ? Math.round(u.distance_m) + ' m' : '-';
+        row.querySelector('.drone-action').innerHTML = renderActionCell(u);
+    });
+}
+
+setInterval(refreshFiles, 3000);
+</script>
+{% endblock %}

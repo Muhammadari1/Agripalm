@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Report Log Drone — {{ file.batch_name }}{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+    <a href="{{ url_for('dashboard_drone_report') }}" class="btn btn-secondary btn-sm">&#8592; Kembali</a>
+    <h1 style="margin:0; font-size:20px;">{{ file.batch_name }}</h1>
+</div>
+<div style="color:#7f8c8d; font-size:13px; margin-bottom:4px;">
+    Berisi {{ file.files_total }} file
+</div>
+<div style="color:#7f8c8d; font-size:13px; margin-bottom:20px;">
+    {% if file.drone_sn %}SN {{ file.drone_sn }}{% endif %}
+    {% if file.duration_s %} &nbsp;·&nbsp; Durasi total {{ ('%.1f'|format(file.duration_s / 60)).replace('.', ',') }} menit{% endif %}
+    {% if file.distance_m %} &nbsp;·&nbsp; Jarak total {{ '%.0f'|format(file.distance_m) }} m{% endif %}
+    {% if file.finished_at %} &nbsp;·&nbsp; Selesai {{ file.finished_at.strftime('%d %b %Y %H:%M') }}{% endif %}
+</div>
+
+{% if wrong_server_host %}
+<div class="table-container" style="padding:16px; margin-bottom:20px; border-left:4px solid #e74c3c;">
+    <strong style="color:#e74c3c;">File ini diproses di server lain: {{ wrong_server_host }}</strong>
+    <p style="color:#bdc3c7; margin:8px 0 0;">
+        Dashboard ini jalan di 2 server yang berbagi database tapi TIDAK berbagi
+        penyimpanan file — hasil (GPX/Excel/peta) file ini tersimpan di server
+        <b>{{ wrong_server_host }}</b>, bukan di server yang sedang Anda buka
+        sekarang. Buka menu Report Log Drone lewat server tersebut untuk melihat/download
+        hasilnya.
+    </p>
+</div>
+{% else %}
+<div style="display:flex; gap:10px; margin-bottom:20px;">
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('dashboard_drone_report_download', upload_id=file.id, kind='gpx') }}">&#11015; GPX (gabungan)</a>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('dashboard_drone_report_download', upload_id=file.id, kind='shp') }}">&#11015; SHP</a>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('dashboard_drone_report_download', upload_id=file.id, kind='xlsx') }}">&#11015; Excel Monitoring</a>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('dashboard_drone_report_download', upload_id=file.id, kind='png') }}">&#11015; Peta per Region (ZIP)</a>
+    <a class="btn btn-secondary btn-sm" href="{{ url_for('dashboard_drone_report_download', upload_id=file.id, kind='pptx') }}">&#128196; Report</a>
+</div>
+
+{% if file.error_message %}
+<div class="table-container" style="padding:16px; margin-bottom:20px; border-left:4px solid #f39c12;">
+    <strong style="color:#f39c12;">Catatan:</strong>
+    <span style="color:#bdc3c7;">{{ file.error_message }}</span>
+</div>
+{% endif %}
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="table-container" style="padding:16px;">
+    <div id="mapStatus" style="color:#7f8c8d; font-size:13px; margin-bottom:8px;">Memuat peta...</div>
+    <div id="leaflet-map" style="height:560px; border-radius:8px; background:#1a252f;"></div>
+    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:12px; color:#bdc3c7;">
+        <span><span class="legend-dot" style="background:#16a34a;"></span> Takeoff</span>
+        <span><span class="legend-dot" style="background:#dc2626;"></span> Landing</span>
+        <span><span class="legend-dot" style="background:#ff8c00;"></span> Jalur terbang</span>
+        <span><span class="legend-dot" style="background:#dfead3;"></span> Blok (Aresta)</span>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if not wrong_server_host %}
+<script>
+const map = L.map('leaflet-map');
+L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    attribution: '&copy; Google', maxZoom: 20, maxNativeZoom: 20
+}).addTo(map);
+
+fetch('{{ url_for("dashboard_drone_report_geojson", upload_id=file.id) }}')
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            document.getElementById('mapStatus').textContent = 'Gagal memuat data peta: ' + data.error;
+            return;
+        }
+        document.getElementById('mapStatus').textContent = '';
+
+        let bounds = null;
+
+        if (data.blocks && data.blocks.features && data.blocks.features.length) {
+            const blockLayer = L.geoJSON(data.blocks, {
+                style: () => ({ fillColor: '#dfead3', fillOpacity: 0.35, color: '#6f8f57', weight: 1 }),
+                onEachFeature: (feature, lyr) => {
+                    const p = feature.properties || {};
+                    const label = p.Blok_ID || p.blok_id || p.NO_BLOK || '';
+                    if (label) lyr.bindPopup(`<b>Blok ${label}</b>`);
+                },
+            }).addTo(map);
+            bounds = blockLayer.getBounds();
+        }
+
+        if (data.track && data.track.features && data.track.features.length) {
+            const trackLayer = L.geoJSON(data.track, {
+                style: () => ({ color: '#ff8c00', weight: 4 }),
+                pointToLayer: (feature, latlng) => {
+                    const kind = (feature.properties || {}).kind;
+                    const color = kind === 'takeoff' ? '#16a34a' : '#dc2626';
+                    return L.circleMarker(latlng, { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 1 });
+                },
+                onEachFeature: (feature, lyr) => {
+                    const kind = (feature.properties || {}).kind;
+                    if (kind === 'takeoff') lyr.bindPopup('Takeoff');
+                    if (kind === 'landing') lyr.bindPopup('Landing');
+                },
+            }).addTo(map);
+            bounds = bounds ? bounds.extend(trackLayer.getBounds()) : trackLayer.getBounds();
+        }
+
+        if (bounds && bounds.isValid()) {
+            map.fitBounds(bounds, { padding: [24, 24] });
+        } else {
+            map.setView([0, 0], 2);
+        }
+    })
+    .catch(err => {
+        document.getElementById('mapStatus').textContent = 'Gagal memuat data peta: ' + err;
+    });
+</script>
+{% endif %}
+{% endblock %}
