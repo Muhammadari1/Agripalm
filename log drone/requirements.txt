@@ -1,0 +1,15 @@
+# Install lewat Python bawaan QGIS (bukan pip biasa), contoh:
+#   "C:\Program Files\QGIS 3.40.6\bin\python-qgis-ltr.bat" -m pip install -r requirements.txt
+#   "C:\Program Files\QGIS 3.40.6\bin\python-qgis-ltr.bat" -m playwright install chromium
+#
+# geopandas/GDAL/pyproj TIDAK di daftar sini -- itu sudah dibawa oleh instalasi
+# QGIS itu sendiri, install ulang lewat pip malah bisa bentrok versinya.
+Flask
+psycopg2-binary
+python-pptx
+openpyxl
+pandas
+numpy
+Pillow
+playwright
+ldap3
